@@ -73,7 +73,12 @@ def build_parser():
     parser.add_argument(
         "-" + OPTION_LIMIT_SHORT,
         "--" + OPTION_LIMIT,
-        help="Only show a subpart of the Json object. Split on char '>'.",
+        help="Only show a subpart of the Json object defined by minilanguage. "
+             "Split on char '>' : ITEM_1>ITEM_2>ITEM_3 "
+             "ITEMS are defined by JSON Key. "
+             "When encounter a JSON Array, numeration or targeting applies: "
+             "NUMERATION : The first ITEM in Array is defined by #0, the second by #1... to #n-1. "
+             "TARGETING : An element of Array can be targeted with key:value returning the first matching. ",
     )
     parser.add_argument(
         "-" + OPTION_FROM_FILE_SHORT,
@@ -135,7 +140,15 @@ def limit_json_object_to_if_needed(loaded):
         logging.info("LIMIT TO SUBTREE '{}'".format(json_limiter))
         to_keep = loaded
         for level in json_limiter.split('>'):
-            to_keep = to_keep[level]
+            if '#' in level:
+                to_keep = to_keep[int(level[1:])]
+            elif ':' in level:
+                key, value = level.split(':')
+                for sub_object in to_keep:
+                    if sub_object[key] == value:
+                        to_keep = sub_object
+            else:
+                to_keep = to_keep[level]
         return to_keep
     logging.debug("NO SUBTREE DEFINED. All Json will be printed.")
     return loaded

@@ -23,24 +23,32 @@ optional arguments:
 import argparse
 import json
 import logging
+import re
 
+FIRST_ELEMENT = slice(0, 1)
 
 # OPTIONS
 OPTION_VERBOSITY = "verbosity"
-OPTION_VERBOSITY_SHORT = OPTION_VERBOSITY[0:1]
+OPTION_VERBOSITY_SHORT = OPTION_VERBOSITY[FIRST_ELEMENT]
 
 OPTION_ORDERED = "ordered"
-OPTION_ORDERED_SHORT = OPTION_ORDERED[0:1]
+OPTION_ORDERED_SHORT = OPTION_ORDERED[FIRST_ELEMENT]
 
 OPTION_INDENT = "indent"
-OPTION_INDENT_SHORT = OPTION_INDENT[0:1]
+OPTION_INDENT_SHORT = OPTION_INDENT[FIRST_ELEMENT]
 OPTION_INDENT_DEFAULT = 4
 
 OPTION_LIMIT = "limit"
-OPTION_LIMIT_SHORT = OPTION_LIMIT[0:1]
+OPTION_LIMIT_SHORT = OPTION_LIMIT[FIRST_ELEMENT]
+
+OPTION_REGEX = "regex"
+OPTION_REGEX_SHORT = OPTION_REGEX[FIRST_ELEMENT]
+
+OPTION_PRUNE = "prune"
+OPTION_PRUNE_SHORT = OPTION_PRUNE[FIRST_ELEMENT]
 
 OPTION_FROM_FILE = "file"
-OPTION_FROM_FILE_SHORT = OPTION_FROM_FILE[0:1]
+OPTION_FROM_FILE_SHORT = OPTION_FROM_FILE[FIRST_ELEMENT]
 
 # VALUES
 JSON_TEXT_TO_PARSE = "JSON"
@@ -79,6 +87,17 @@ def build_parser():
              "When encounter a JSON Array, numeration or targeting applies: "
              "NUMERATION : The first ITEM in Array is defined by #0, the second by #1... to #n-1. "
              "TARGETING : An element of Array can be targeted with key:value returning the first matching. ",
+    )
+    parser.add_argument(
+        "-" + OPTION_PRUNE_SHORT,
+        "--" + OPTION_PRUNE,
+        help="Limit depth and eventually key:values with minilanguage. "
+             "SYNTAX : NUMBER:KEY1,KEY2. Number is the max depth level, KEY# the kept keys."
+    )
+    parser.add_argument(
+        "-" + OPTION_REGEX_SHORT,
+        "--" + OPTION_REGEX,
+        help="No effect without {}. Use REGEX to match.".format(OPTION_LIMIT)
     )
     parser.add_argument(
         "-" + OPTION_FROM_FILE_SHORT,
@@ -134,7 +153,7 @@ def to_pretty(loaded, order, indent_count):
     )
 
 
-def limit_json_object_to_if_needed(loaded):
+def limit_json_object_to_if_needed(parsed, loaded):
     json_limiter = parsed[OPTION_LIMIT]
     if json_limiter:
         logging.info("LIMIT TO SUBTREE '{}'".format(json_limiter))
@@ -144,13 +163,37 @@ def limit_json_object_to_if_needed(loaded):
                 to_keep = to_keep[int(level[1:])]
             elif ':' in level:
                 key, value = level.split(':')
-                for sub_object in to_keep:
-                    if sub_object[key] == value:
-                        to_keep = sub_object
+                if parsed[OPTION_REGEX]:
+                    logging.info("Compiling {} as regex".format(value))
+                    matcher = re.compile(value)
+                    for sub_object in to_keep:
+                        if matcher.match(sub_object[key]):
+                            to_keep = sub_object
+                else:
+                    for sub_object in to_keep:
+                        if sub_object[key] == value:
+                            to_keep = sub_object
             else:
                 to_keep = to_keep[level]
         return to_keep
     logging.debug("NO SUBTREE DEFINED. All Json will be printed.")
+    return loaded
+
+
+def prune_json_object_to_if_needed(parsed, loaded):
+    json_pruner = parsed[OPTION_PRUNE]
+    if json_pruner:
+        logging.info("PRUNE SUBTREE WITH '{}'".format(json_pruner))
+        to_keep = {}
+        max_depth, keys = json_pruner.split(':')
+        max_depth = int(max_depth)
+        keys = keys.split(',')
+        while True:
+            if max_depth == 0:
+                break
+            next_stage =
+            if
+
     return loaded
 
 
@@ -162,7 +205,8 @@ if __name__ == '__main__':
 
     text_to_load_as_json = read_from_file_if_needed(parsed)
     loaded_json = json.loads(text_to_load_as_json)
-    loaded_json = limit_json_object_to_if_needed(loaded_json)
+    loaded_json = limit_json_object_to_if_needed(parsed, loaded_json)
+    loaded_json = prune_json_object_to_if_needed(parsed, loaded_json)
     pretty = to_pretty(loaded_json, parsed[OPTION_ORDERED], parsed[OPTION_INDENT], )
 
     print(pretty)
